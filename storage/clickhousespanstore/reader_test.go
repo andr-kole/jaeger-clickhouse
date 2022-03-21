@@ -470,7 +470,8 @@ func TestTraceReader_GetTrace(t *testing.T) {
 	require.NoError(t, err, "an error was not expected when opening a stub database connection")
 	defer db.Close()
 
-	traceReader := NewTraceReader(db, testOperationsTable, testIndexTable, testSpansTable, testMaxNumSpans)
+	var testMaxNumSpansLimit uint = 1000
+	traceReader := NewTraceReader(db, testOperationsTable, testIndexTable, testSpansTable, testMaxNumSpansLimit)
 	traceID := model.TraceID{High: 0, Low: 1}
 	spanRefs := generateRandomSpans(testSpansInTrace)
 	trace := model.Trace{}
@@ -514,7 +515,7 @@ func TestTraceReader_GetTrace(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			mock.
 				ExpectQuery(
-					fmt.Sprintf("SELECT model FROM %s PREWHERE traceID IN (?)", testSpansTable),
+					fmt.Sprintf("SELECT model FROM %s PREWHERE traceID = ? ORDER BY timestamp LIMIT %d", testSpansTable, testMaxNumSpansLimit),
 				).
 				WithArgs(traceID).
 				WillReturnRows(test.queryResult)
@@ -538,7 +539,8 @@ func TestSpanWriter_getTraces(t *testing.T) {
 	require.NoError(t, err, "an error was not expected when opening a stub database connection")
 	defer db.Close()
 
-	traceReader := NewTraceReader(db, testOperationsTable, testIndexTable, testSpansTable, testMaxNumSpans)
+	var testMaxNumSpansLimit uint = 1000
+	traceReader := NewTraceReader(db, testOperationsTable, testIndexTable, testSpansTable, testMaxNumSpansLimit)
 	traceIDs := []model.TraceID{
 		{High: 0, Low: 1},
 		{High: 2, Low: 2},
@@ -583,7 +585,7 @@ func TestSpanWriter_getTraces(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			mock.
 				ExpectQuery(
-					fmt.Sprintf("SELECT model FROM %s PREWHERE traceID IN (?,?,?,?)", testSpansTable),
+					fmt.Sprintf("SELECT model FROM %s PREWHERE traceID = ? ORDER BY timestamp LIMIT %d UNION ALL SELECT model FROM %s PREWHERE traceID = ? ORDER BY timestamp LIMIT %d UNION ALL SELECT model FROM %s PREWHERE traceID = ? ORDER BY timestamp LIMIT %d UNION ALL SELECT model FROM %s PREWHERE traceID = ? ORDER BY timestamp LIMIT %d", testSpansTable, testMaxNumSpansLimit, testSpansTable, testMaxNumSpansLimit, testSpansTable, testMaxNumSpansLimit, testSpansTable, testMaxNumSpansLimit),
 				).
 				WithArgs(traceIDStrings...).
 				WillReturnRows(test.queryResult)
@@ -642,7 +644,7 @@ func TestSpanWriter_getTracesIncorrectData(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			mock.
 				ExpectQuery(
-					fmt.Sprintf("SELECT model FROM %s PREWHERE traceID IN (?,?,?,?)", testSpansTable),
+					fmt.Sprintf("SELECT model FROM %s PREWHERE traceID = ? UNION ALL SELECT model FROM %s PREWHERE traceID = ? UNION ALL SELECT model FROM %s PREWHERE traceID = ? UNION ALL SELECT model FROM %s PREWHERE traceID = ?", testSpansTable, testSpansTable, testSpansTable, testSpansTable),
 				).
 				WithArgs(traceIDStrings...).
 				WillReturnRows(test.queryResult)
@@ -679,7 +681,7 @@ func TestSpanWriter_getTracesQueryError(t *testing.T) {
 
 	mock.
 		ExpectQuery(
-			fmt.Sprintf("SELECT model FROM %s PREWHERE traceID IN (?,?,?,?)", testSpansTable),
+			fmt.Sprintf("SELECT model FROM %s PREWHERE traceID = ? UNION ALL SELECT model FROM %s PREWHERE traceID = ? UNION ALL SELECT model FROM %s PREWHERE traceID = ? UNION ALL SELECT model FROM %s PREWHERE traceID = ?", testSpansTable, testSpansTable, testSpansTable, testSpansTable),
 		).
 		WithArgs(traceIDStrings...).
 		WillReturnError(errorMock)
@@ -711,7 +713,7 @@ func TestSpanWriter_getTracesRowsScanError(t *testing.T) {
 
 	mock.
 		ExpectQuery(
-			fmt.Sprintf("SELECT model FROM %s PREWHERE traceID IN (?,?,?,?)", testSpansTable),
+			fmt.Sprintf("SELECT model FROM %s PREWHERE traceID = ? UNION ALL SELECT model FROM %s PREWHERE traceID = ? UNION ALL SELECT model FROM %s PREWHERE traceID = ? UNION ALL SELECT model FROM %s PREWHERE traceID = ?", testSpansTable, testSpansTable, testSpansTable, testSpansTable),
 		).
 		WithArgs(traceIDStrings...).
 		WillReturnRows(rows)
